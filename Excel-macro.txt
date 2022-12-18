@@ -1,0 +1,95 @@
+Sub CreateShortcut()
+    Application.OnKey "+^{I}", "GetCanariData"
+End Sub
+
+Sub DeleteShortcut()
+    Application.OnKey "+^{I}"
+End Sub
+
+Public Function GetAPIOutputMessage(ext As String) As String
+
+    On Error GoTo ErrHand:
+    Dim url As String
+    Dim GetAPIOutputFull As String
+    Dim start_rank, total_lenght As Integer
+    If ext = "" Then
+        url = "https://data.canari.dev/csv"
+    Else:
+        url = "https://data.canari.dev/" + ext + "/csv"
+    End If
+   
+    With CreateObject("MSXML2.XMLHTTP")
+         '.SetRequestHeader "Cache-Control", "no-cache,max-age=0"
+         '.SetRequestHeader "pragma", "no-cache"
+         .Open "POST", url, False 'using GET instead of POST leads to caching so refresh issues
+         .send
+         GetAPIOutputFull = .ResponseText
+    End With
+    start_rank = InStr(GetAPIOutputFull, "message")
+    If start_rank = 0 Then
+        GetAPIOutputMessage = ""
+    Else
+        total_lenght = Len(GetAPIOutputFull)
+        GetAPIOutputMessage = Mid(GetAPIOutputFull, start_rank + 11, total_lenght - start_rank - 12)
+    End If
+   
+    Exit Function
+   
+ErrHand:
+    GetAPIOutputMessage = ""
+End Function
+
+Private Function CSV_to_Array(CSV As String) As Object
+
+ Dim CSV_Rows() As String
+ Set CSV_to_Array = New Collection
+
+ CSV_Rows() = Split(CSV, "\n") ' split the CSV into rows
+
+ ' Import CSV data into two dimensional variant array with numeric as value, date as date, string as string.
+ aryWidth = 0
+ aryRows = UBound(CSV_Rows)
+ ReDim Ary(0 To aryRows, 0 To aryWidth) As Variant
+
+ For Y = LBound(CSV_Rows) To aryRows
+
+    CSV_Fields = Split(CSV_Rows(Y), ",")
+
+    If UBound(CSV_Fields) > aryWidth Then
+        aryWidth = UBound(CSV_Fields)
+        ReDim Preserve Ary(0 To aryRows, 0 To aryWidth) As Variant
+    End If
+
+    For X = LBound(CSV_Fields) To UBound(CSV_Fields)
+        If IsNumeric(CSV_Fields(X)) Then
+            Ary(Y, X) = Val(CSV_Fields(X))
+        ElseIf IsDate(CSV_Fields(X)) Then
+            Ary(Y, X) = CDate(CSV_Fields(X))
+        Else
+            Ary(Y, X) = CStr(CSV_Fields(X))
+        End If
+    Next
+ Next
+ 
+ CSV_to_Array.Add Ary(), Key:="tab"
+ CSV_to_Array.Add aryRows, Key:="rows"
+ CSV_to_Array.Add aryWidth, Key:="width"
+
+End Function
+
+Public Sub GetCanariData()
+
+    Dim APIMessage As String
+    Dim APIArray As Variant
+    Dim c As Collection
+    APIMessage = GetAPIOutputMessage(ActiveCell.Value)
+    If APIMessage = "" Then
+        Exit Sub
+    Else
+        Set c = CSV_to_Array(APIMessage)
+        APIArray = c.Item("tab")
+        ActiveCell.Offset(1, 0).Resize(c.Item("rows") + 1, c.Item("width") + 1).NumberFormat = "General"
+        ActiveCell.Offset(1, 0).Resize(c.Item("rows") + 1, c.Item("width") + 1) = APIArray
+       
+    End If
+End Sub
